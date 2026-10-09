@@ -26,10 +26,13 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 
 API = "https://www.cinemacity.cz/cz/data-api-service/v1/quickbook/10101"
+TICKETS = "https://tickets.cinemacity.cz"
+PRAGUE = ZoneInfo("Europe/Prague")
 CINEMA_ID = "1052"          # Praha Flora, OC FLORA
 FILM_ID = "8105s2r"         # Duna: část třetí
 FIRST_DATE = "2026-12-01"   # no Dune screenings before this; skip earlier dates to keep requests low
@@ -42,6 +45,26 @@ def get(path):
     r = requests.get(f"{API}/{path}", params=PARAMS, headers=HEADERS, timeout=20)
     r.raise_for_status()
     return r.json()["body"]
+
+
+def prague_now():
+    return datetime.now(PRAGUE).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def sale_start(event_id):
+    """When online sales open ("2026-09-09 09:00:00", Prague time), from the ticketing app.
+
+    Screenings can be listed before they're bookable; the ticketing app then says
+    "tickets go on sale at ...". Returns None if it can't be determined.
+    """
+    try:
+        with requests.Session() as s:
+            s.headers.update(HEADERS)
+            s.post(f"{TICKETS}/api/order/{event_id}?lang=cs", data={"jwtToken": ""}, allow_redirects=False, timeout=20)
+            r = s.get(f"{TICKETS}/api/presentations/{event_id}", headers={"Accept": "application/json"}, timeout=20)
+            return (r.json().get("presentation") or {}).get("ticketSaleStart")
+    except (requests.RequestException, ValueError):
+        return None
 
 
 def is_imax_70mm(event):
@@ -130,9 +153,17 @@ def get_chat_ids():
         print("\nTELEGRAM_CHAT_IDS=" + ",".join(str(c) for c in chats))
 
 
+def on_sale(s):
+    return not s["blockOnlineSales"] and (not s.get("saleStart") or s["saleStart"] <= prague_now())
+
+
 def fmt(s):
     when = datetime.fromisoformat(s["time"]).strftime("%a %d.%m. %H:%M")
-    status = "SOLD OUT" if s["soldOut"] else f"avail {s['availability']}"
+    if not on_sale(s):
+        opens = s.get("saleStart")
+        status = f"NOT ON SALE YET - opens {datetime.fromisoformat(opens):%a %d.%m. %H:%M}" if opens else "NOT ON SALE YET"
+    else:
+        status = "SOLD OUT" if s["soldOut"] else f"avail {s['availability']}"
     if s["blockOnlineSales"]:
         status += ", online sales blocked"
     return f"{when} | {s['auditorium']} | {status}\n  {s['link']}"
@@ -141,10 +172,24 @@ def fmt(s):
 def check(state, first_run):
     current = fetch_screenings()
     new = [k for k in current if k not in state]
+
+    # Sale start: look it up for new screenings, and keep re-checking while it's still in the
+    # future (or unknown) in case the cinema moves it.
+    for k, s in current.items():
+        old = state.get(k, {})
+        s["saleStart"] = old.get("saleStart")
+        if k in new or not old.get("saleStart") or old["saleStart"] > prague_now():
+            s["saleStart"] = sale_start(k) or old.get("saleStart")
+        s["wasOnSale"] = old.get("wasOnSale", on_sale(s))
+
+    opened = [k for k in current if k not in new and not current[k]["wasOnSale"] and on_sale(current[k])]
     # The public API's soldOut flag isn't reliable (it stays False on sold-out shows), so also
     # treat any rise in availabilityRatio as seats being freed (cancellations, expired holds).
-    freed = [k for k in current if k in state and not current[k]["soldOut"] and (
+    freed = [k for k in current if k in state and k not in opened and on_sale(current[k])
+             and not current[k]["soldOut"] and (
         state[k]["soldOut"] or (current[k]["availability"] or 0) > (state[k]["availability"] or 0))]
+    for s in current.values():
+        s["wasOnSale"] = s["wasOnSale"] or on_sale(s)
 
     if first_run and new:
         print("Baseline - already-listed IMAX 70mm screenings (no alert):")
@@ -154,6 +199,9 @@ def check(state, first_run):
         if new:
             lines = [fmt(current[k]) for k in sorted(new, key=lambda k: current[k]["time"])]
             notify(f"DUNE 3 IMAX 70mm @ Flora: {len(new)} new screening(s)!", "\n".join(lines), current[new[0]]["link"])
+        if opened:
+            lines = [fmt(current[k]) for k in sorted(opened, key=lambda k: current[k]["time"])]
+            notify(f"DUNE 3 IMAX 70mm @ Flora: TICKETS ON SALE NOW!", "\n".join(lines), current[opened[0]]["link"])
         if freed:
             lines = [f"{fmt(current[k])}\n  availability {state[k]['availability']} -> {current[k]['availability']}"
                      for k in sorted(freed, key=lambda k: current[k]["time"])]
