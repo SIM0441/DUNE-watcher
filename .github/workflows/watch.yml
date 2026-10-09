@@ -1,0 +1,53 @@
+name: Watch Dune IMAX 70mm
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # GitHub's minimum; runs may start a few minutes late
+  workflow_dispatch:
+    inputs:
+      test_notify:
+        description: "Send a test Telegram message instead of checking"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
+      TELEGRAM_REPEAT: ${{ vars.TELEGRAM_REPEAT || '3' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Test notification
+        if: ${{ inputs.test_notify }}
+        run: python watch_dune.py --test-notify
+
+      - name: Check for new screenings
+        if: ${{ !inputs.test_notify }}
+        run: python watch_dune.py --once
+
+      - name: Save seen screenings
+        if: ${{ !inputs.test_notify }}
+        run: |
+          if [ -n "$(git status --porcelain seen_screenings.json)" ]; then
+            git config user.name "dune-watcher"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add seen_screenings.json
+            git commit -m "Update seen screenings"
+            git push
+          fi

@@ -1,0 +1,62 @@
+{
+ "248952": {
+  "time": "2026-12-15T14:00:00",
+  "auditorium": "IMAX VOLVO",
+  "soldOut": false,
+  "availability": 0.0156,
+  "blockOnlineSales": false,
+  "link": "https://www.cinemacity.cz/cz/booking-router/launch/1052/248952?lang=cs",
+  "attrs": [
+   "12-plus",
+   "2d",
+   "70-mm",
+   "action",
+   "adventure",
+   "drama",
+   "first-subbed-lang-cs",
+   "original-lang-en",
+   "sci-fi",
+   "subbed"
+  ]
+ },
+ "248958": {
+  "time": "2026-12-15T17:20:00",
+  "auditorium": "IMAX VOLVO",
+  "soldOut": false,
+  "availability": 0.0156,
+  "blockOnlineSales": false,
+  "link": "https://www.cinemacity.cz/cz/booking-router/launch/1052/248958?lang=cs",
+  "attrs": [
+   "12-plus",
+   "2d",
+   "70-mm",
+   "action",
+   "adventure",
+   "drama",
+   "first-subbed-lang-cs",
+   "original-lang-en",
+   "sci-fi",
+   "subbed"
+  ]
+ },
+ "249034": {
+  "time": "2026-12-15T20:40:00",
+  "auditorium": "IMAX VOLVO",
+  "soldOut": false,
+  "availability": 0.0156,
+  "blockOnlineSales": false,
+  "link": "https://www.cinemacity.cz/cz/booking-router/launch/1052/249034?lang=cs",
+  "attrs": [
+   "12-plus",
+   "2d",
+   "70-mm",
+   "action",
+   "adventure",
+   "drama",
+   "first-subbed-lang-cs",
+   "original-lang-en",
+   "sci-fi",
+   "subbed"
+  ]
+ }
+}
