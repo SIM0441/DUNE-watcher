@@ -32,7 +32,7 @@ import requests
 API = "https://www.cinemacity.cz/cz/data-api-service/v1/quickbook/10101"
 CINEMA_ID = "1052"          # Praha Flora, OC FLORA
 FILM_ID = "8105s2r"         # Duna: část třetí
-STATE_FILE = Path(__file__).with_name("seen_screenings.json")
+STATE_FILE = Path(os.environ.get("DUNE_STATE_FILE") or Path(__file__).with_name("seen_screenings.json"))
 HEADERS = {"User-Agent": "Mozilla/5.0 (dune-imax-watcher)"}
 PARAMS = {"attr": "", "lang": "cs_CZ"}
 
@@ -67,8 +67,15 @@ def fetch_screenings():
     return screenings
 
 
+OPEN_BROWSER = False
+
+
 def notify(title, message, url=None, repeat=None):
     print(f"\n*** {title} ***\n{message}\n", flush=True)
+
+    if OPEN_BROWSER and url and shutil.which("powershell.exe"):
+        subprocess.Popen(["powershell.exe", "-NoProfile", "-Command", f"Start-Process '{url}'"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     if shutil.which("powershell.exe"):
         t = title.replace("'", "''")
@@ -166,7 +173,11 @@ def main():
                     help="on first run, alert about already-listed screenings too")
     ap.add_argument("--test-notify", action="store_true")
     ap.add_argument("--get-chat-ids", action="store_true")
+    ap.add_argument("--open-browser", action="store_true", help="open the booking page on alert (Windows/WSL)")
     args = ap.parse_args()
+
+    global OPEN_BROWSER
+    OPEN_BROWSER = args.open_browser
 
     if args.get_chat_ids:
         return get_chat_ids()
