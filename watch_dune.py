@@ -67,7 +67,7 @@ def fetch_screenings():
     return screenings
 
 
-def notify(title, message, url=None):
+def notify(title, message, url=None, repeat=None):
     print(f"\n*** {title} ***\n{message}\n", flush=True)
 
     if shutil.which("powershell.exe"):
@@ -87,7 +87,7 @@ def notify(title, message, url=None):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_ids = [c.strip() for c in os.environ.get("TELEGRAM_CHAT_IDS", "").split(",") if c.strip()]
     if token and chat_ids:
-        repeat = int(os.environ.get("TELEGRAM_REPEAT", "3"))
+        repeat = repeat or int(os.environ.get("TELEGRAM_REPEAT", "3"))
         text = f"🎬 {title}\n\n{message}"
         for i in range(repeat):
             if i:
@@ -133,18 +133,25 @@ def fmt(s):
 def check(state, first_run):
     current = fetch_screenings()
     new = [k for k in current if k not in state]
-    reopened = [k for k in current if k in state and state[k]["soldOut"] and not current[k]["soldOut"]]
+    # The public API's soldOut flag isn't reliable (it stays False on sold-out shows), so also
+    # treat any rise in availabilityRatio as seats being freed (cancellations, expired holds).
+    freed = [k for k in current if k in state and not current[k]["soldOut"] and (
+        state[k]["soldOut"] or (current[k]["availability"] or 0) > (state[k]["availability"] or 0))]
 
     if first_run and new:
         print("Baseline - already-listed IMAX 70mm screenings (no alert):")
         for k in sorted(new, key=lambda k: current[k]["time"]):
             print("  " + fmt(current[k]))
-    elif new or reopened:
-        lines = [fmt(current[k]) for k in sorted(new, key=lambda k: current[k]["time"])]
-        lines += ["(seats back) " + fmt(current[k]) for k in reopened]
-        title = f"DUNE 3 IMAX 70mm @ Flora: {len(new)} new" + (f", {len(reopened)} reopened" if reopened else "")
-        first = (new or reopened)[0]
-        notify(title, "\n".join(lines), current[first]["link"])
+    else:
+        if new:
+            lines = [fmt(current[k]) for k in sorted(new, key=lambda k: current[k]["time"])]
+            notify(f"DUNE 3 IMAX 70mm @ Flora: {len(new)} new screening(s)!", "\n".join(lines), current[new[0]]["link"])
+        if freed:
+            lines = [f"{fmt(current[k])}\n  availability {state[k]['availability']} -> {current[k]['availability']}"
+                     for k in sorted(freed, key=lambda k: current[k]["time"])]
+            # Single message: freed seats go fast and can flicker, so don't spam reminders.
+            notify(f"DUNE 3 IMAX 70mm @ Flora: seats freed up - go now!", "\n".join(lines),
+                   current[freed[0]]["link"], repeat=1)
 
     state.update(current)
     STATE_FILE.write_text(json.dumps(state, indent=1, ensure_ascii=False))
