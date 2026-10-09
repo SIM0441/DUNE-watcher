@@ -32,6 +32,7 @@ import requests
 API = "https://www.cinemacity.cz/cz/data-api-service/v1/quickbook/10101"
 CINEMA_ID = "1052"          # Praha Flora, OC FLORA
 FILM_ID = "8105s2r"         # Duna: část třetí
+FIRST_DATE = "2026-12-01"   # no Dune screenings before this; skip earlier dates to keep requests low
 STATE_FILE = Path(os.environ.get("DUNE_STATE_FILE") or Path(__file__).with_name("seen_screenings.json"))
 HEADERS = {"User-Agent": "Mozilla/5.0 (dune-imax-watcher)"}
 PARAMS = {"attr": "", "lang": "cs_CZ"}
@@ -48,7 +49,7 @@ def is_imax_70mm(event):
 
 
 def fetch_screenings():
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = max(datetime.now().strftime("%Y-%m-%d"), FIRST_DATE)
     dates = [d for d in get(f"dates/in-cinema/{CINEMA_ID}/until/2027-12-31")["dates"] if d >= today]
     screenings = {}
     for d in dates:
