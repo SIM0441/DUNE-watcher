@@ -221,6 +221,8 @@ def main():
     ap.add_argument("--alert-existing", action="store_true",
                     help="on first run, alert about already-listed screenings too")
     ap.add_argument("--test-notify", action="store_true")
+    ap.add_argument("--test-alert", action="store_true",
+                    help="send the 'new screening' alert for the earliest listed screening, marked as a test")
     ap.add_argument("--get-chat-ids", action="store_true")
     ap.add_argument("--open-browser", action="store_true", help="open the booking page on alert (Windows/WSL)")
     args = ap.parse_args()
@@ -239,6 +241,15 @@ def main():
         return
 
     state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+
+    if args.test_alert:
+        current = fetch_screenings()
+        if not current:
+            sys.exit("No screenings listed right now - nothing to test with.")
+        k = min(current, key=lambda k: current[k]["time"])
+        current[k]["saleStart"] = state.get(k, {}).get("saleStart")
+        notify("[TEST] DUNE 3 IMAX 70mm @ Flora: 1 new screening(s)!", fmt(current[k]), current[k]["link"])
+        return
     first_run = not state and not args.alert_existing
 
     while True:

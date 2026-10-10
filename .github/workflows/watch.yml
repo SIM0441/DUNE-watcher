@@ -9,6 +9,10 @@ on:
         description: "Send a test Telegram message instead of checking"
         type: boolean
         default: false
+      test_alert:
+        description: "Send a sample 'new screening' alert for an already-known screening"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -37,12 +41,16 @@ jobs:
         if: ${{ inputs.test_notify }}
         run: python watch_dune.py --test-notify
 
+      - name: Test alert
+        if: ${{ inputs.test_alert }}
+        run: python watch_dune.py --test-alert
+
       - name: Check for new screenings
-        if: ${{ !inputs.test_notify }}
+        if: ${{ !inputs.test_notify && !inputs.test_alert }}
         run: python watch_dune.py --once
 
       - name: Save seen screenings
-        if: ${{ !inputs.test_notify }}
+        if: ${{ !inputs.test_notify && !inputs.test_alert }}
         run: |
           if [ -n "$(git status --porcelain seen_screenings.json)" ]; then
             git config user.name "dune-watcher"
